@@ -5,7 +5,7 @@ const router = express.Router();
 // Ranking de participação (quem mais respondeu perguntas)
 router.get('/participacao', async (req, res) => {
     try {
-        const [rows] = await db.query(
+        const result = await db.query(
             `SELECT 
                 u.id,
                 u.nome,
@@ -18,11 +18,11 @@ router.get('/participacao', async (req, res) => {
              FROM usuarios u
              LEFT JOIN respostas r ON u.id = r.usuario_id
              GROUP BY u.id, u.nome, u.email, u.turma
-             HAVING total_respostas > 0
+             HAVING COUNT(DISTINCT r.id) > 0
              ORDER BY total_respostas DESC, percentual_acerto DESC
              LIMIT 50`
         );
-        res.json(rows);
+        res.json(result.rows);
     } catch (error) {
         console.error('Erro ao buscar ranking de participação:', error);
         res.status(500).json({ error: 'Erro interno do servidor' });
@@ -32,7 +32,7 @@ router.get('/participacao', async (req, res) => {
 // Ranking de presença
 router.get('/presenca', async (req, res) => {
     try {
-        const [rows] = await db.query(
+        const result = await db.query(
             `SELECT 
                 u.id,
                 u.nome,
@@ -44,11 +44,11 @@ router.get('/presenca', async (req, res) => {
              FROM usuarios u
              LEFT JOIN presenca p ON u.id = p.usuario_id
              GROUP BY u.id, u.nome, u.email, u.turma
-             HAVING total_presencas > 0
+             HAVING COUNT(p.id) > 0
              ORDER BY total_presencas DESC, u.nome ASC
              LIMIT 50`
         );
-        res.json(rows);
+        res.json(result.rows);
     } catch (error) {
         console.error('Erro ao buscar ranking de presença:', error);
         res.status(500).json({ error: 'Erro interno do servidor' });
@@ -58,7 +58,7 @@ router.get('/presenca', async (req, res) => {
 // Ranking por turma
 router.get('/turma/:turma', async (req, res) => {
     try {
-        const [rows] = await db.query(
+        const result = await db.query(
             `SELECT 
                 u.id,
                 u.nome,
@@ -70,13 +70,13 @@ router.get('/turma/:turma', async (req, res) => {
              FROM usuarios u
              LEFT JOIN respostas r ON u.id = r.usuario_id
              LEFT JOIN presenca p ON u.id = p.usuario_id
-             WHERE u.turma = ?
+             WHERE u.turma = $1
              GROUP BY u.id, u.nome, u.email
              ORDER BY percentual_acerto DESC, total_respostas DESC
              LIMIT 50`,
             [req.params.turma]
         );
-        res.json(rows);
+        res.json(result.rows);
     } catch (error) {
         console.error('Erro ao buscar ranking da turma:', error);
         res.status(500).json({ error: 'Erro interno do servidor' });
@@ -87,30 +87,36 @@ router.get('/turma/:turma', async (req, res) => {
 router.get('/estatisticas', async (req, res) => {
     try {
         // Total de alunos
-        const [totalAlunos] = await db.query('SELECT COUNT(*) as total FROM usuarios');
+        const totalAlunosResult = await db.query('SELECT COUNT(*) as total FROM usuarios');
+        const totalAlunos = parseInt(totalAlunosResult.rows[0].total);
         
         // Total de perguntas respondidas
-        const [totalRespostas] = await db.query('SELECT COUNT(*) as total FROM respostas');
+        const totalRespostasResult = await db.query('SELECT COUNT(*) as total FROM respostas');
+        const totalRespostas = parseInt(totalRespostasResult.rows[0].total);
         
         // Média de acertos
-        const [mediaAcertos] = await db.query(
-            `SELECT ROUND(AVG(correta) * 100, 2) as media_percentual 
+        const mediaAcertosResult = await db.query(
+            `SELECT ROUND(AVG(CASE WHEN correta = true THEN 1 ELSE 0 END) * 100, 2) as media_percentual 
              FROM respostas`
         );
+        const mediaAcertos = mediaAcertosResult.rows[0]?.media_percentual 
+            ? parseFloat(mediaAcertosResult.rows[0].media_percentual) 
+            : 0;
         
         // Presenças hoje
         const hoje = new Date().toISOString().split('T')[0];
-        const [presencasHoje] = await db.query(
-            'SELECT COUNT(*) as total FROM presenca WHERE data_aula = ?',
+        const presencasHojeResult = await db.query(
+            'SELECT COUNT(*) as total FROM presenca WHERE data_aula = $1',
             [hoje]
         );
+        const presencasHoje = parseInt(presencasHojeResult.rows[0].total);
         
         // Top 3 alunos
-        const [topAlunos] = await db.query(
+        const topAlunosResult = await db.query(
             `SELECT 
                 u.nome,
                 COUNT(r.id) as respostas,
-                ROUND(AVG(r.correta) * 100, 2) as percentual
+                ROUND(AVG(CASE WHEN r.correta = true THEN 1 ELSE 0 END) * 100, 2) as percentual
              FROM usuarios u
              JOIN respostas r ON u.id = r.usuario_id
              GROUP BY u.id, u.nome
@@ -119,11 +125,11 @@ router.get('/estatisticas', async (req, res) => {
         );
 
         res.json({
-            total_alunos: totalAlunos[0].total,
-            total_respostas: totalRespostas[0].total,
-            media_acertos: mediaAcertos[0]?.media_percentual || 0,
-            presencas_hoje: presencasHoje[0].total,
-            top_alunos: topAlunos
+            total_alunos: totalAlunos,
+            total_respostas: totalRespostas,
+            media_acertos: mediaAcertos,
+            presencas_hoje: presencasHoje,
+            top_alunos: topAlunosResult.rows
         });
     } catch (error) {
         console.error('Erro ao buscar estatísticas:', error);
