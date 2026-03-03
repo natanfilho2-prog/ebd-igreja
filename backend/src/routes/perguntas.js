@@ -5,10 +5,10 @@ const router = express.Router();
 // Listar todas as perguntas ativas
 router.get('/', async (req, res) => {
     try {
-        const [rows] = await db.query(
+        const result = await db.query(
             'SELECT id, enunciado, opcao_a, opcao_b, opcao_c, data_criacao FROM perguntas WHERE ativa = true ORDER BY data_criacao DESC'
         );
-        res.json(rows);
+        res.json(result.rows);
     } catch (error) {
         console.error('Erro ao buscar perguntas:', error);
         res.status(500).json({ error: 'Erro interno do servidor' });
@@ -18,16 +18,16 @@ router.get('/', async (req, res) => {
 // Buscar uma pergunta específica
 router.get('/:id', async (req, res) => {
     try {
-        const [rows] = await db.query(
-            'SELECT id, enunciado, opcao_a, opcao_b, opcao_c FROM perguntas WHERE id = ? AND ativa = true',
+        const result = await db.query(
+            'SELECT id, enunciado, opcao_a, opcao_b, opcao_c FROM perguntas WHERE id = $1 AND ativa = true',
             [req.params.id]
         );
         
-        if (rows.length === 0) {
+        if (result.rows.length === 0) {
             return res.status(404).json({ error: 'Pergunta não encontrada' });
         }
         
-        res.json(rows[0]);
+        res.json(result.rows[0]);
     } catch (error) {
         console.error('Erro ao buscar pergunta:', error);
         res.status(500).json({ error: 'Erro interno do servidor' });
@@ -48,13 +48,13 @@ router.post('/', async (req, res) => {
             return res.status(400).json({ error: 'Resposta correta deve ser A, B ou C' });
         }
         
-        const [result] = await db.query(
-            'INSERT INTO perguntas (enunciado, opcao_a, opcao_b, opcao_c, resposta_correta) VALUES (?, ?, ?, ?, ?)',
+        const result = await db.query(
+            'INSERT INTO perguntas (enunciado, opcao_a, opcao_b, opcao_c, resposta_correta) VALUES ($1, $2, $3, $4, $5) RETURNING id',
             [enunciado, opcao_a, opcao_b, opcao_c, resposta_correta]
         );
         
         res.status(201).json({ 
-            id: result.insertId, 
+            id: result.rows[0].id, 
             message: 'Pergunta criada com sucesso' 
         });
     } catch (error) {
@@ -68,12 +68,12 @@ router.put('/:id', async (req, res) => {
     try {
         const { enunciado, opcao_a, opcao_b, opcao_c, resposta_correta } = req.body;
         
-        const [result] = await db.query(
-            'UPDATE perguntas SET enunciado = ?, opcao_a = ?, opcao_b = ?, opcao_c = ?, resposta_correta = ? WHERE id = ?',
+        const result = await db.query(
+            'UPDATE perguntas SET enunciado = $1, opcao_a = $2, opcao_b = $3, opcao_c = $4, resposta_correta = $5 WHERE id = $6',
             [enunciado, opcao_a, opcao_b, opcao_c, resposta_correta, req.params.id]
         );
         
-        if (result.affectedRows === 0) {
+        if (result.rowCount === 0) {
             return res.status(404).json({ error: 'Pergunta não encontrada' });
         }
         
@@ -87,12 +87,12 @@ router.put('/:id', async (req, res) => {
 // "Deletar" pergunta (na verdade, desativar)
 router.delete('/:id', async (req, res) => {
     try {
-        const [result] = await db.query(
-            'UPDATE perguntas SET ativa = false WHERE id = ?',
+        const result = await db.query(
+            'UPDATE perguntas SET ativa = false WHERE id = $1',
             [req.params.id]
         );
         
-        if (result.affectedRows === 0) {
+        if (result.rowCount === 0) {
             return res.status(404).json({ error: 'Pergunta não encontrada' });
         }
         

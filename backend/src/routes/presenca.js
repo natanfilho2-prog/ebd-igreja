@@ -15,34 +15,34 @@ router.post('/', async (req, res) => {
         const data = data_aula || new Date().toISOString().split('T')[0];
 
         // Iniciar transação
-        await db.query('START TRANSACTION');
+        await db.query('BEGIN');
 
         try {
             // 1. Inserir ou buscar usuário
             let usuarioId;
-            const [usuarioExistente] = await db.query(
-                'SELECT id FROM usuarios WHERE email = ?',
+            const usuarioExistente = await db.query(
+                'SELECT id FROM usuarios WHERE email = $1',
                 [email_aluno]
             );
 
-            if (usuarioExistente.length > 0) {
-                usuarioId = usuarioExistente[0].id;
+            if (usuarioExistente.rows.length > 0) {
+                usuarioId = usuarioExistente.rows[0].id;
                 // Atualizar nome e turma
                 await db.query(
-                    'UPDATE usuarios SET nome = ?, turma = ? WHERE id = ?',
+                    'UPDATE usuarios SET nome = $1, turma = $2 WHERE id = $3',
                     [nome_aluno, turma || null, usuarioId]
                 );
             } else {
-                const [novoUsuario] = await db.query(
-                    'INSERT INTO usuarios (nome, email, turma) VALUES (?, ?, ?)',
+                const novoUsuario = await db.query(
+                    'INSERT INTO usuarios (nome, email, turma) VALUES ($1, $2, $3) RETURNING id',
                     [nome_aluno, email_aluno, turma || null]
                 );
-                usuarioId = novoUsuario.insertId;
+                usuarioId = novoUsuario.rows[0].id;
             }
 
-            // 2. Registrar presença (ignora se já existir)
+            // 2. Registrar presença (ignora se já existir usando ON CONFLICT)
             await db.query(
-                'INSERT IGNORE INTO presenca (usuario_id, data_aula) VALUES (?, ?)',
+                'INSERT INTO presenca (usuario_id, data_aula) VALUES ($1, $2) ON CONFLICT (usuario_id, data_aula) DO NOTHING',
                 [usuarioId, data]
             );
 
@@ -69,15 +69,15 @@ router.get('/verificar/:email/:data?', async (req, res) => {
     try {
         const data = req.params.data || new Date().toISOString().split('T')[0];
         
-        const [rows] = await db.query(
+        const result = await db.query(
             `SELECT p.* FROM presenca p
              JOIN usuarios u ON p.usuario_id = u.id
-             WHERE u.email = ? AND p.data_aula = ?`,
+             WHERE u.email = $1 AND p.data_aula = $2`,
             [req.params.email, data]
         );
 
         res.json({
-            presente: rows.length > 0,
+            presente: result.rows.length > 0,
             data: data
         });
     } catch (error) {
@@ -91,19 +91,19 @@ router.get('/data/:data?', async (req, res) => {
     try {
         const data = req.params.data || new Date().toISOString().split('T')[0];
         
-        const [rows] = await db.query(
+        const result = await db.query(
             `SELECT u.id, u.nome, u.email, u.turma, p.data_aula
              FROM presenca p
              JOIN usuarios u ON p.usuario_id = u.id
-             WHERE p.data_aula = ?
+             WHERE p.data_aula = $1
              ORDER BY u.nome`,
             [data]
         );
 
         res.json({
             data: data,
-            total: rows.length,
-            presentes: rows
+            total: result.rows.length,
+            presentes: result.rows
         });
     } catch (error) {
         console.error('Erro ao listar presenças:', error);
