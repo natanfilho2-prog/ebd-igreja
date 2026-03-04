@@ -4,7 +4,7 @@ import GerenciarPerguntas from './pages/Professor/GerenciarPerguntas';
 import Rankings from './pages/Professor/Rankings';
 
 // Páginas do Aluno
-import Quiz from './pages/Aluno/Quiz';
+import QuizEstilizado from './pages/Aluno/QuizEstilizado';
 import Presenca from './pages/Aluno/Presenca';
 
 // Páginas do Professor
@@ -53,7 +53,7 @@ function App() {
       <div style={styles.content}>
         <Routes>
           {/* Rotas do Aluno */}
-          <Route path="/" element={<Quiz />} />
+          <Route path="/" element={<QuizEstilizado />} />
           <Route path="/presenca" element={<Presenca />} />
 
           {/* Rotas do Professor */}
