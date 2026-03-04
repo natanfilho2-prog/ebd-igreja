@@ -56,7 +56,7 @@ function Presenca() {
         setLoading(true);
 
         try {
-            const response = await api.post('/presenca', {
+            await api.post('/presenca', {
                 nome_aluno: aluno.nome,
                 email_aluno: aluno.email,
                 turma: aluno.turma || null

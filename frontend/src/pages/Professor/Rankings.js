@@ -41,7 +41,8 @@ function Rankings() {
     async function carregarRankingTurma(turma) {
         setLoading(true);
         try {
-            const response = await api.get(`/rankings/turma/${encodeURIComponent(turma)}`);
+            // Variável não usada - removida
+            await api.get(`/rankings/turma/${encodeURIComponent(turma)}`);
             // Atualizar conforme necessário
         } catch (error) {
             console.error('Erro ao carregar ranking da turma:', error);
@@ -120,26 +121,26 @@ function Rankings() {
                             <table style={styles.tabela}>
                                 <thead>
                                     <tr>
-                                        <th>Pos</th>
-                                        <th>Nome</th>
-                                        <th>Turma</th>
-                                        <th>Total Respostas</th>
-                                        <th>Acertos</th>
-                                        <th>% Acerto</th>
-                                        <th>Dias</th>
+                                        <th style={styles.tabelaHeader}>Pos</th>
+                                        <th style={styles.tabelaHeader}>Nome</th>
+                                        <th style={styles.tabelaHeader}>Turma</th>
+                                        <th style={styles.tabelaHeader}>Total Respostas</th>
+                                        <th style={styles.tabelaHeader}>Acertos</th>
+                                        <th style={styles.tabelaHeader}>% Acerto</th>
+                                        <th style={styles.tabelaHeader}>Dias</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {participacao.map((aluno, index) => (
                                         <tr key={aluno.id}>
-                                            <td style={styles.posicao}>
+                                            <td style={styles.tabelaCell}>
                                                 {index === 0 && '🥇'}
                                                 {index === 1 && '🥈'}
                                                 {index === 2 && '🥉'}
                                                 {index > 2 && `#${index + 1}`}
                                             </td>
-                                            <td>{aluno.nome}</td>
-                                            <td>{aluno.turma || '—'}</td>
+                                            <td style={styles.tabelaCell}>{aluno.nome}</td>
+                                            <td style={styles.tabelaCell}>{aluno.turma || '—'}</td>
                                             <td style={styles.numero}>{aluno.total_respostas}</td>
                                             <td style={styles.numero}>{aluno.acertos}</td>
                                             <td style={styles.numero}>
@@ -165,28 +166,28 @@ function Rankings() {
                             <table style={styles.tabela}>
                                 <thead>
                                     <tr>
-                                        <th>Pos</th>
-                                        <th>Nome</th>
-                                        <th>Turma</th>
-                                        <th>Total Presenças</th>
-                                        <th>Primeira Presença</th>
-                                        <th>Última Presença</th>
+                                        <th style={styles.tabelaHeader}>Pos</th>
+                                        <th style={styles.tabelaHeader}>Nome</th>
+                                        <th style={styles.tabelaHeader}>Turma</th>
+                                        <th style={styles.tabelaHeader}>Total Presenças</th>
+                                        <th style={styles.tabelaHeader}>Primeira Presença</th>
+                                        <th style={styles.tabelaHeader}>Última Presença</th>
                                     </tr>
                                 </thead>
                                 <tbody>
                                     {presenca.map((aluno, index) => (
                                         <tr key={aluno.id}>
-                                            <td style={styles.posicao}>
+                                            <td style={styles.tabelaCell}>
                                                 {index === 0 && '🥇'}
                                                 {index === 1 && '🥈'}
                                                 {index === 2 && '🥉'}
                                                 {index > 2 && `#${index + 1}`}
                                             </td>
-                                            <td>{aluno.nome}</td>
-                                            <td>{aluno.turma || '—'}</td>
+                                            <td style={styles.tabelaCell}>{aluno.nome}</td>
+                                            <td style={styles.tabelaCell}>{aluno.turma || '—'}</td>
                                             <td style={styles.numero}>{aluno.total_presencas}</td>
-                                            <td>{new Date(aluno.primeira_presenca).toLocaleDateString()}</td>
-                                            <td>{new Date(aluno.ultima_presenca).toLocaleDateString()}</td>
+                                            <td style={styles.tabelaCell}>{new Date(aluno.primeira_presenca).toLocaleDateString()}</td>
+                                            <td style={styles.tabelaCell}>{new Date(aluno.ultima_presenca).toLocaleDateString()}</td>
                                         </tr>
                                     ))}
                                 </tbody>
@@ -266,18 +267,24 @@ const styles = {
         borderCollapse: 'collapse',
         marginTop: '10px'
     },
-    tabela: {
-        borderBottom: '1px solid #ddd'
-    },
-    tabela: {
+    tabelaHeader: {
         padding: '12px',
-        textAlign: 'left'
+        textAlign: 'left',
+        borderBottom: '1px solid #ddd',
+        fontWeight: 'bold'
+    },
+    tabelaCell: {
+        padding: '12px',
+        textAlign: 'left',
+        borderBottom: '1px solid #ddd'
     },
     posicao: {
         fontSize: '18px'
     },
     numero: {
-        textAlign: 'center'
+        textAlign: 'center',
+        padding: '12px',
+        borderBottom: '1px solid #ddd'
     },
     exportBotoes: {
         display: 'flex',

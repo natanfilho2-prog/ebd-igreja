@@ -88,22 +88,22 @@ function Dashboard() {
             {/* Presenças de Hoje */}
             <div style={styles.secao}>
                 <h2>📋 Alunos Presentes Hoje</h2>
-                <div style={styles.tabela}>
+                <div style={styles.tabelaContainer}>
                     {ultimasPresencas.length > 0 ? (
                         <table style={styles.table}>
                             <thead>
                                 <tr>
-                                    <th>Nome</th>
-                                    <th>Turma</th>
-                                    <th>E-mail</th>
+                                    <th style={styles.tableHeader}>Nome</th>
+                                    <th style={styles.tableHeader}>Turma</th>
+                                    <th style={styles.tableHeader}>E-mail</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 {ultimasPresencas.map((presenca, index) => (
                                     <tr key={index}>
-                                        <td>{presenca.nome}</td>
-                                        <td>{presenca.turma || '—'}</td>
-                                        <td>{presenca.email}</td>
+                                        <td style={styles.tableCell}>{presenca.nome}</td>
+                                        <td style={styles.tableCell}>{presenca.turma || '—'}</td>
+                                        <td style={styles.tableCell}>{presenca.email}</td>
                                     </tr>
                                 ))}
                             </tbody>
@@ -206,12 +206,10 @@ const styles = {
         fontSize: '20px'
     },
     topAlunoInfo: {
-        flex: 1
-    },
-    topAlunoInfo: {
+        flex: 1,
         margin: 0
     },
-    tabela: {
+    tabelaContainer: {
         overflowX: 'auto'
     },
     table: {
@@ -219,12 +217,16 @@ const styles = {
         borderCollapse: 'collapse',
         marginTop: '10px'
     },
-    table: {
-        borderBottom: '1px solid #ddd'
-    },
-    table: {
+    tableHeader: {
         padding: '12px',
-        textAlign: 'left'
+        textAlign: 'left',
+        borderBottom: '1px solid #ddd',
+        fontWeight: 'bold'
+    },
+    tableCell: {
+        padding: '12px',
+        textAlign: 'left',
+        borderBottom: '1px solid #ddd'
     },
     semDados: {
         textAlign: 'center',
