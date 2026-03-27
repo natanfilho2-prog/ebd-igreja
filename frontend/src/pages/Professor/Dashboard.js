@@ -4,25 +4,23 @@ import api from '../../services/api';
 import Loading from '../../components/Loading';
 
 function Dashboard() {
-    const [estatisticas, setEstatisticas] = useState(null);
-    const [ultimasPresencas, setUltimasPresencas] = useState([]);
     const [loading, setLoading] = useState(true);
+    const [ano, setAno] = useState(new Date().getFullYear());
+    const [trimestre, setTrimestre] = useState(1);
+    const [estatisticas, setEstatisticas] = useState(null);
 
     useEffect(() => {
         carregarDados();
-    }, []);
+    }, [ano, trimestre]);
 
     async function carregarDados() {
+        setLoading(true);
         try {
-            // Carregar estatísticas
-            const statsResponse = await api.get('/rankings/estatisticas');
-            setEstatisticas(statsResponse.data);
-
-            // Carregar presenças de hoje
-            const presencaResponse = await api.get('/presenca/data');
-            setUltimasPresencas(presencaResponse.data.presentes || []);
+            const response = await api.get(`/rankings/filtered?ano=${ano}&trimestre=${trimestre}`);
+            setEstatisticas(response.data);
         } catch (error) {
             console.error('Erro ao carregar dashboard:', error);
+            alert('Erro ao carregar dados. Tente novamente.');
         } finally {
             setLoading(false);
         }
@@ -34,105 +32,87 @@ function Dashboard() {
         <div style={styles.container}>
             <h1>📊 Dashboard do Professor</h1>
 
-            {/* Cards de Estatísticas */}
+            {/* Filtros */}
+            <div style={styles.filtros}>
+                <div style={styles.filtroGroup}>
+                    <label>Ano:</label>
+                    <select value={ano} onChange={e => setAno(parseInt(e.target.value))} style={styles.select}>
+                        {[2024, 2025, 2026].map(y => (
+                            <option key={y} value={y}>{y}</option>
+                        ))}
+                    </select>
+                </div>
+                <div style={styles.filtroGroup}>
+                    <label>Trimestre:</label>
+                    <select value={trimestre} onChange={e => setTrimestre(parseInt(e.target.value))} style={styles.select}>
+                        <option value={1}>1º Trimestre (Jan-Mar)</option>
+                        <option value={2}>2º Trimestre (Abr-Jun)</option>
+                        <option value={3}>3º Trimestre (Jul-Set)</option>
+                        <option value={4}>4º Trimestre (Out-Dez)</option>
+                    </select>
+                </div>
+            </div>
+
+            {/* Cards */}
             <div style={styles.cardsGrid}>
                 <div style={styles.card}>
                     <div style={styles.cardIcon}>👥</div>
                     <div style={styles.cardContent}>
-                        <h3>Total de Alunos</h3>
+                        <h3>Alunos Participantes</h3>
                         <p style={styles.cardNumero}>{estatisticas?.total_alunos || 0}</p>
                     </div>
                 </div>
-
                 <div style={styles.card}>
                     <div style={styles.cardIcon}>📝</div>
                     <div style={styles.cardContent}>
-                        <h3>Respostas</h3>
-                        <p style={styles.cardNumero}>{estatisticas?.total_respostas || 0}</p>
-                    </div>
-                </div>
-
-                <div style={styles.card}>
-                    <div style={styles.cardIcon}>✅</div>
-                    <div style={styles.cardContent}>
-                        <h3>Média de Acertos</h3>
-                        <p style={styles.cardNumero}>{estatisticas?.media_acertos || 0}%</p>
-                    </div>
-                </div>
-
-                <div style={styles.card}>
-                    <div style={styles.cardIcon}>📅</div>
-                    <div style={styles.cardContent}>
-                        <h3>Presenças Hoje</h3>
-                        <p style={styles.cardNumero}>{estatisticas?.presencas_hoje || 0}</p>
+                        <h3>Envios de Quiz</h3>
+                        <p style={styles.cardNumero}>{estatisticas?.total_envios || 0}</p>
                     </div>
                 </div>
             </div>
 
-            {/* Top Alunos */}
+            {/* Top 5 Alunos */}
             <div style={styles.secao}>
-                <h2>🏆 Top 3 Alunos</h2>
-                <div style={styles.topAlunos}>
-                    {estatisticas?.top_alunos?.map((aluno, index) => (
-                        <div key={index} style={styles.topAlunoCard}>
-                            <div style={styles.topAlunoPosicao}>{index + 1}º</div>
-                            <div style={styles.topAlunoInfo}>
-                                <h4>{aluno.nome}</h4>
-                                <p>{aluno.respostas} respostas • {aluno.percentual}% acertos</p>
-                            </div>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Presenças de Hoje */}
-            <div style={styles.secao}>
-                <h2>📋 Alunos Presentes Hoje</h2>
-                <div style={styles.tabelaContainer}>
-                    {ultimasPresencas.length > 0 ? (
+                <h2>🏆 Top 5 Alunos (Trimestre)</h2>
+                {estatisticas?.top_alunos && estatisticas.top_alunos.length > 0 ? (
+                    <div style={styles.tabelaContainer}>
                         <table style={styles.table}>
                             <thead>
                                 <tr>
+                                    <th style={styles.tableHeader}>Pos</th>
                                     <th style={styles.tableHeader}>Nome</th>
-                                    <th style={styles.tableHeader}>Turma</th>
-                                    <th style={styles.tableHeader}>E-mail</th>
+                                    <th style={styles.tableHeader}>Média Quiz (%)</th>
+                                    <th style={styles.tableHeader}>Presença (%)</th>
+                                    <th style={styles.tableHeader}>Quizzes</th>
+                                    <th style={styles.tableHeader}>Pontuação</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {ultimasPresencas.map((presenca, index) => (
-                                    <tr key={index}>
-                                        <td style={styles.tableCell}>{presenca.nome}</td>
-                                        <td style={styles.tableCell}>{presenca.turma || '—'}</td>
-                                        <td style={styles.tableCell}>{presenca.email}</td>
+                                {estatisticas.top_alunos.map((aluno, idx) => (
+                                    <tr key={idx}>
+                                        <td style={styles.tableCell}>{idx + 1}º</td>
+                                        <td style={styles.tableCell}>{aluno.nome}</td>
+                                        <td style={styles.tableCell}>{aluno.media_quiz}%</td>
+                                        <td style={styles.tableCell}>{aluno.media_presenca}%</td>
+                                        <td style={styles.tableCell}>{aluno.total_quizzes}</td>
+                                        <td style={styles.tableCell}>{aluno.pontuacao_rank}</td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
-                    ) : (
-                        <p style={styles.semDados}>Nenhuma presença registrada hoje</p>
-                    )}
-                </div>
+                    </div>
+                ) : (
+                    <p style={styles.semDados}>Nenhum dado disponível para este trimestre.</p>
+                )}
             </div>
 
-            {/* Links Rápidos */}
+            {/* Ações Rápidas */}
             <div style={styles.secao}>
                 <h2>⚡ Ações Rápidas</h2>
                 <div style={styles.botoesGrid}>
                     <Link to="/professor/perguntas" style={styles.botaoAcao}>
                         <span style={styles.botaoIcone}>➕</span>
                         Nova Pergunta
-                    </Link>
-                    <Link to="/professor/rankings" style={styles.botaoAcao}>
-                        <span style={styles.botaoIcone}>📊</span>
-                        Rankings
-                    </Link>
-                    <Link to="/professor/presencas" style={styles.botaoAcao}>
-                        <span style={styles.botaoIcone}>📋</span>
-                        Lista de Presença
-                    </Link>
-                    <Link to="/professor/exportar" style={styles.botaoAcao}>
-                        <span style={styles.botaoIcone}>📥</span>
-                        Exportar Dados
                     </Link>
                 </div>
             </div>
@@ -145,6 +125,25 @@ const styles = {
         maxWidth: '1200px',
         margin: '0 auto',
         padding: '20px'
+    },
+    filtros: {
+        display: 'flex',
+        gap: '20px',
+        marginBottom: '30px',
+        backgroundColor: '#fff',
+        padding: '15px',
+        borderRadius: '8px',
+        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
+    },
+    filtroGroup: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px'
+    },
+    select: {
+        padding: '6px 12px',
+        borderRadius: '4px',
+        border: '1px solid #ddd'
     },
     cardsGrid: {
         display: 'grid',
@@ -179,35 +178,6 @@ const styles = {
         borderRadius: '8px',
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
         marginBottom: '30px'
-    },
-    topAlunos: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-        gap: '15px'
-    },
-    topAlunoCard: {
-        display: 'flex',
-        alignItems: 'center',
-        gap: '15px',
-        padding: '15px',
-        backgroundColor: '#f8f9fa',
-        borderRadius: '8px'
-    },
-    topAlunoPosicao: {
-        width: '40px',
-        height: '40px',
-        backgroundColor: '#FFD700',
-        color: '#333',
-        borderRadius: '50%',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        fontWeight: 'bold',
-        fontSize: '20px'
-    },
-    topAlunoInfo: {
-        flex: 1,
-        margin: 0
     },
     tabelaContainer: {
         overflowX: 'auto'

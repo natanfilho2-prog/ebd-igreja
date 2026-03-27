@@ -3,292 +3,231 @@ import api from '../../services/api';
 import Loading from '../../components/Loading';
 
 function GerenciarPerguntas() {
+    const [licoes, setLicoes] = useState([]);
+    const [licaoSelecionada, setLicaoSelecionada] = useState('');
     const [perguntas, setPerguntas] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [mostrarForm, setMostrarForm] = useState(false);
-    const [editandoId, setEditandoId] = useState(null);
-    const [formData, setFormData] = useState({
-        enunciado: '',
-        opcao_a: '',
-        opcao_b: '',
-        opcao_c: '',
-        resposta_correta: 'A'
-    });
+    const [loading, setLoading] = useState(false);
+    const [salvando, setSalvando] = useState(false);
 
     useEffect(() => {
-        carregarPerguntas();
+        carregarLicoes();
     }, []);
 
-    async function carregarPerguntas() {
+    async function carregarLicoes() {
         try {
-            const response = await api.get('/perguntas');
-            setPerguntas(response.data);
+            const response = await api.get('/licoes');
+            setLicoes(response.data);
         } catch (error) {
-            alert('Erro ao carregar perguntas');
+            alert('Erro ao carregar lições');
+        }
+    }
+
+    async function carregarPerguntas(licaoId) {
+        if (!licaoId) return;
+        setLoading(true);
+        try {
+            const response = await api.get(`/perguntas/licao/${licaoId}`);
+            const perguntasExistentes = response.data;
+            // Garantir que temos 6 perguntas (preencher com vazias se faltar)
+            const perguntasCompletas = [...perguntasExistentes];
+            while (perguntasCompletas.length < 6) {
+                perguntasCompletas.push({
+                    enunciado: '',
+                    opcao_a: '',
+                    opcao_b: '',
+                    opcao_c: '',
+                    resposta_correta: 'A'
+                });
+            }
+            setPerguntas(perguntasCompletas.slice(0, 6));
+        } catch (error) {
+            console.error('Erro ao carregar perguntas:', error);
+            // Iniciar com 6 perguntas vazias
+            setPerguntas(Array(6).fill().map(() => ({
+                enunciado: '',
+                opcao_a: '',
+                opcao_b: '',
+                opcao_c: '',
+                resposta_correta: 'A'
+            })));
         } finally {
             setLoading(false);
         }
     }
 
-    function handleInputChange(e) {
-        setFormData({
-            ...formData,
-            [e.target.name]: e.target.value
-        });
+    function handlePerguntaChange(index, field, value) {
+        const novas = [...perguntas];
+        novas[index][field] = value;
+        setPerguntas(novas);
     }
 
-    function handleEditar(pergunta) {
-        setFormData({
-            enunciado: pergunta.enunciado,
-            opcao_a: pergunta.opcao_a,
-            opcao_b: pergunta.opcao_b,
-            opcao_c: pergunta.opcao_c,
-            resposta_correta: pergunta.resposta_correta
-        });
-        setEditandoId(pergunta.id);
-        setMostrarForm(true);
-    }
-
-    function handleNovo() {
-        setFormData({
-            enunciado: '',
-            opcao_a: '',
-            opcao_b: '',
-            opcao_c: '',
-            resposta_correta: 'A'
-        });
-        setEditandoId(null);
-        setMostrarForm(true);
-    }
-
-    async function handleSubmit(e) {
-        e.preventDefault();
-
-        // Validações
-        if (!formData.enunciado || !formData.opcao_a || !formData.opcao_b || !formData.opcao_c) {
-            alert('Preencha todos os campos');
-            return;
-        }
-
-        try {
-            if (editandoId) {
-                // Atualizar
-                await api.put(`/perguntas/${editandoId}`, formData);
-                alert('Pergunta atualizada com sucesso!');
-            } else {
-                // Criar nova
-                await api.post('/perguntas', formData);
-                alert('Pergunta criada com sucesso!');
+    async function handleSalvar() {
+        // Validar todas as perguntas
+        for (let i = 0; i < perguntas.length; i++) {
+            const p = perguntas[i];
+            if (!p.enunciado || !p.opcao_a || !p.opcao_b || !p.opcao_c) {
+                alert(`Preencha todos os campos da pergunta ${i + 1}`);
+                return;
             }
-            
-            setMostrarForm(false);
-            carregarPerguntas();
-        } catch (error) {
-            alert('Erro ao salvar pergunta');
-        }
-    }
-
-    async function handleDeletar(id) {
-        if (!window.confirm('Tem certeza que deseja excluir esta pergunta?')) {
-            return;
         }
 
+        setSalvando(true);
         try {
-            await api.delete(`/perguntas/${id}`);
-            alert('Pergunta excluída com sucesso!');
-            carregarPerguntas();
+            await api.put(`/perguntas/licao/${licaoSelecionada}`, { perguntas });
+            alert('Perguntas salvas com sucesso!');
+            // Recarregar para mostrar os dados atualizados
+            carregarPerguntas(licaoSelecionada);
         } catch (error) {
-            alert('Erro ao excluir pergunta');
+            alert('Erro ao salvar perguntas: ' + (error.response?.data?.error || error.message));
+        } finally {
+            setSalvando(false);
         }
     }
 
-    function handleCancelar() {
-        setMostrarForm(false);
-        setEditandoId(null);
+    if (licoes.length === 0 && !loading) {
+        return (
+            <div style={styles.container}>
+                <h2>Nenhuma lição cadastrada</h2>
+                <p>Antes de criar perguntas, cadastre uma lição.</p>
+            </div>
+        );
     }
-
-    if (loading) return <Loading />;
 
     return (
         <div style={styles.container}>
             <div style={styles.header}>
-                <h1>📝 Gerenciar Perguntas</h1>
-                <button onClick={handleNovo} style={styles.botaoNovo}>
-                    ➕ Nova Pergunta
-                </button>
-            </div>
-
-            {mostrarForm && (
-                <div style={styles.formContainer}>
-                    <h2>{editandoId ? 'Editar Pergunta' : 'Nova Pergunta'}</h2>
-                    <form onSubmit={handleSubmit} style={styles.form}>
-                        <div style={styles.formGroup}>
-                            <label style={styles.label}>Enunciado da Pergunta:</label>
-                            <textarea
-                                name="enunciado"
-                                value={formData.enunciado}
-                                onChange={handleInputChange}
-                                style={styles.textarea}
-                                rows="3"
-                                required
-                            />
-                        </div>
-
-                        <div style={styles.formGroup}>
-                            <label style={styles.label}>Opção A:</label>
-                            <input
-                                type="text"
-                                name="opcao_a"
-                                value={formData.opcao_a}
-                                onChange={handleInputChange}
-                                style={styles.input}
-                                required
-                            />
-                        </div>
-
-                        <div style={styles.formGroup}>
-                            <label style={styles.label}>Opção B:</label>
-                            <input
-                                type="text"
-                                name="opcao_b"
-                                value={formData.opcao_b}
-                                onChange={handleInputChange}
-                                style={styles.input}
-                                required
-                            />
-                        </div>
-
-                        <div style={styles.formGroup}>
-                            <label style={styles.label}>Opção C:</label>
-                            <input
-                                type="text"
-                                name="opcao_c"
-                                value={formData.opcao_c}
-                                onChange={handleInputChange}
-                                style={styles.input}
-                                required
-                            />
-                        </div>
-
-                        <div style={styles.formGroup}>
-                            <label style={styles.label}>Resposta Correta:</label>
-                            <select
-                                name="resposta_correta"
-                                value={formData.resposta_correta}
-                                onChange={handleInputChange}
-                                style={styles.select}
-                            >
-                                <option value="A">A</option>
-                                <option value="B">B</option>
-                                <option value="C">C</option>
-                            </select>
-                        </div>
-
-                        <div style={styles.formBotoes}>
-                            <button type="submit" style={styles.botaoSalvar}>
-                                {editandoId ? 'Atualizar' : 'Salvar'}
-                            </button>
-                            <button type="button" onClick={handleCancelar} style={styles.botaoCancelar}>
-                                Cancelar
-                            </button>
-                        </div>
-                    </form>
+                <h1>📝 Gerenciar Perguntas da Lição</h1>
+                <div style={styles.selector}>
+                    <label htmlFor="licao">Selecione a lição:</label>
+                    <select
+                        id="licao"
+                        value={licaoSelecionada}
+                        onChange={(e) => {
+                            const id = e.target.value;
+                            setLicaoSelecionada(id);
+                            if (id) carregarPerguntas(id);
+                        }}
+                        style={styles.select}
+                    >
+                        <option value="">-- Escolha uma lição --</option>
+                        {licoes.map(licao => (
+                            <option key={licao.id} value={licao.id}>
+                                Lição {licao.numero_licao} – {licao.titulo}
+                            </option>
+                        ))}
+                    </select>
                 </div>
-            )}
-
-            <div style={styles.listaPerguntas}>
-                {perguntas.length === 0 ? (
-                    <p style={styles.semDados}>Nenhuma pergunta cadastrada ainda.</p>
-                ) : (
-                    perguntas.map((pergunta, index) => (
-                        <div key={pergunta.id} style={styles.perguntaCard}>
-                            <div style={styles.perguntaHeader}>
-                                <span style={styles.perguntaNumero}>#{index + 1}</span>
-                                <div style={styles.perguntaAcoes}>
-                                    <button 
-                                        onClick={() => handleEditar(pergunta)}
-                                        style={styles.botaoEditar}
-                                    >
-                                        ✏️ Editar
-                                    </button>
-                                    <button 
-                                        onClick={() => handleDeletar(pergunta.id)}
-                                        style={styles.botaoExcluir}
-                                    >
-                                        🗑️ Excluir
-                                    </button>
-                                </div>
-                            </div>
-                            <p style={styles.perguntaEnunciado}>{pergunta.enunciado}</p>
-                            <div style={styles.opcoesLista}>
-                                <div style={{
-                                    ...styles.opcaoItem,
-                                    backgroundColor: pergunta.resposta_correta === 'A' ? '#d4edda' : '#f8f9fa'
-                                }}>
-                                    <strong>A)</strong> {pergunta.opcao_a}
-                                    {pergunta.resposta_correta === 'A' && <span style={styles.correta}> ✓ Correta</span>}
-                                </div>
-                                <div style={{
-                                    ...styles.opcaoItem,
-                                    backgroundColor: pergunta.resposta_correta === 'B' ? '#d4edda' : '#f8f9fa'
-                                }}>
-                                    <strong>B)</strong> {pergunta.opcao_b}
-                                    {pergunta.resposta_correta === 'B' && <span style={styles.correta}> ✓ Correta</span>}
-                                </div>
-                                <div style={{
-                                    ...styles.opcaoItem,
-                                    backgroundColor: pergunta.resposta_correta === 'C' ? '#d4edda' : '#f8f9fa'
-                                }}>
-                                    <strong>C)</strong> {pergunta.opcao_c}
-                                    {pergunta.resposta_correta === 'C' && <span style={styles.correta}> ✓ Correta</span>}
-                                </div>
-                            </div>
-                        </div>
-                    ))
-                )}
             </div>
+
+            {licaoSelecionada && (
+                <>
+                    {loading ? (
+                        <Loading />
+                    ) : (
+                        <>
+                            <p style={{ marginBottom: '20px' }}>
+                                Preencha as 6 perguntas da lição. Todas devem ser preenchidas.
+                            </p>
+                            {perguntas.map((pergunta, idx) => (
+                                <div key={idx} style={styles.perguntaCard}>
+                                    <h3>Pergunta {idx + 1}</h3>
+                                    <div style={styles.formGroup}>
+                                        <label>Enunciado *</label>
+                                        <textarea
+                                            value={pergunta.enunciado}
+                                            onChange={(e) => handlePerguntaChange(idx, 'enunciado', e.target.value)}
+                                            rows="2"
+                                            style={styles.textarea}
+                                            required
+                                        />
+                                    </div>
+                                    <div style={styles.formGroup}>
+                                        <label>Opção A *</label>
+                                        <input
+                                            type="text"
+                                            value={pergunta.opcao_a}
+                                            onChange={(e) => handlePerguntaChange(idx, 'opcao_a', e.target.value)}
+                                            style={styles.input}
+                                            required
+                                        />
+                                    </div>
+                                    <div style={styles.formGroup}>
+                                        <label>Opção B *</label>
+                                        <input
+                                            type="text"
+                                            value={pergunta.opcao_b}
+                                            onChange={(e) => handlePerguntaChange(idx, 'opcao_b', e.target.value)}
+                                            style={styles.input}
+                                            required
+                                        />
+                                    </div>
+                                    <div style={styles.formGroup}>
+                                        <label>Opção C *</label>
+                                        <input
+                                            type="text"
+                                            value={pergunta.opcao_c}
+                                            onChange={(e) => handlePerguntaChange(idx, 'opcao_c', e.target.value)}
+                                            style={styles.input}
+                                            required
+                                        />
+                                    </div>
+                                    <div style={styles.formGroup}>
+                                        <label>Resposta Correta *</label>
+                                        <select
+                                            value={pergunta.resposta_correta}
+                                            onChange={(e) => handlePerguntaChange(idx, 'resposta_correta', e.target.value)}
+                                            style={styles.select}
+                                        >
+                                            <option value="A">A</option>
+                                            <option value="B">B</option>
+                                            <option value="C">C</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            ))}
+                            <div style={styles.botaoContainer}>
+                                <button onClick={handleSalvar} disabled={salvando} style={styles.botaoSalvar}>
+                                    {salvando ? 'Salvando...' : 'Salvar todas as perguntas'}
+                                </button>
+                            </div>
+                        </>
+                    )}
+                </>
+            )}
         </div>
     );
 }
 
 const styles = {
     container: {
-        maxWidth: '900px',
+        maxWidth: '1000px',
         margin: '0 auto',
         padding: '20px'
     },
     header: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
         marginBottom: '30px'
     },
-    botaoNovo: {
-        backgroundColor: '#28a745',
-        color: 'white',
-        border: 'none',
-        padding: '10px 20px',
-        borderRadius: '4px',
-        fontSize: '16px',
-        cursor: 'pointer'
+    selector: {
+        marginTop: '20px',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '10px'
     },
-    formContainer: {
+    select: {
+        padding: '8px 12px',
+        fontSize: '1rem',
+        border: '1px solid #ddd',
+        borderRadius: '4px'
+    },
+    perguntaCard: {
         backgroundColor: '#fff',
         padding: '20px',
         borderRadius: '8px',
         boxShadow: '0 2px 4px rgba(0,0,0,0.1)',
         marginBottom: '30px'
     },
-    form: {
-        marginTop: '20px'
-    },
     formGroup: {
         marginBottom: '15px'
-    },
-    label: {
-        display: 'block',
-        marginBottom: '5px',
-        fontWeight: 'bold'
     },
     input: {
         width: '100%',
@@ -305,105 +244,18 @@ const styles = {
         fontSize: '16px',
         fontFamily: 'inherit'
     },
-    select: {
-        width: '100%',
-        padding: '10px',
-        border: '1px solid #ddd',
-        borderRadius: '4px',
-        fontSize: '16px'
-    },
-    formBotoes: {
-        display: 'flex',
-        gap: '10px',
+    botaoContainer: {
+        textAlign: 'center',
         marginTop: '20px'
     },
     botaoSalvar: {
-        backgroundColor: '#007bff',
+        backgroundColor: '#28a745',
         color: 'white',
         border: 'none',
-        padding: '10px 20px',
+        padding: '12px 24px',
         borderRadius: '4px',
         fontSize: '16px',
-        cursor: 'pointer',
-        flex: 1
-    },
-    botaoCancelar: {
-        backgroundColor: '#6c757d',
-        color: 'white',
-        border: 'none',
-        padding: '10px 20px',
-        borderRadius: '4px',
-        fontSize: '16px',
-        cursor: 'pointer',
-        flex: 1
-    },
-    listaPerguntas: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '20px'
-    },
-    perguntaCard: {
-        backgroundColor: '#fff',
-        padding: '20px',
-        borderRadius: '8px',
-        boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-    },
-    perguntaHeader: {
-        display: 'flex',
-        justifyContent: 'space-between',
-        alignItems: 'center',
-        marginBottom: '15px'
-    },
-    perguntaNumero: {
-        backgroundColor: '#007bff',
-        color: 'white',
-        padding: '5px 10px',
-        borderRadius: '4px',
-        fontSize: '14px'
-    },
-    perguntaAcoes: {
-        display: 'flex',
-        gap: '10px'
-    },
-    botaoEditar: {
-        backgroundColor: '#ffc107',
-        color: '#333',
-        border: 'none',
-        padding: '5px 10px',
-        borderRadius: '4px',
         cursor: 'pointer'
-    },
-    botaoExcluir: {
-        backgroundColor: '#dc3545',
-        color: 'white',
-        border: 'none',
-        padding: '5px 10px',
-        borderRadius: '4px',
-        cursor: 'pointer'
-    },
-    perguntaEnunciado: {
-        fontSize: '18px',
-        fontWeight: 'bold',
-        marginBottom: '15px'
-    },
-    opcoesLista: {
-        display: 'flex',
-        flexDirection: 'column',
-        gap: '10px'
-    },
-    opcaoItem: {
-        padding: '10px',
-        borderRadius: '4px'
-    },
-    correta: {
-        color: '#28a745',
-        fontWeight: 'bold',
-        marginLeft: '10px'
-    },
-    semDados: {
-        textAlign: 'center',
-        color: '#999',
-        padding: '40px'
     }
 };
 

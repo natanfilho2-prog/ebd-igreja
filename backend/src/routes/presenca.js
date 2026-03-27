@@ -2,111 +2,102 @@ const express = require('express');
 const db = require('../db');
 const router = express.Router();
 
-// Registrar presença
-router.post('/', async (req, res) => {
+// ============================================
+// POST /presenca/:licaoId
+// Marcar presença em uma lição específica
+// ============================================
+router.post('/:licaoId', async (req, res) => {
+    const { licaoId } = req.params;
+    const { nome, palavra_chave } = req.body;
+
+    // Validações básicas
+    if (!nome || !palavra_chave) {
+        return res.status(400).json({ error: 'Nome e palavra-chave são obrigatórios' });
+    }
+
     try {
-        const { nome_aluno, email_aluno, turma, data_aula } = req.body;
-
-        if (!nome_aluno || !email_aluno) {
-            return res.status(400).json({ error: 'Nome e email são obrigatórios' });
+        // 1. Buscar a lição e sua palavra-chave
+        const licao = await db.query(
+            'SELECT id, titulo, palavra_chave FROM licoes WHERE id = $1 AND ativa = true',
+            [licaoId]
+        );
+        if (licao.rows.length === 0) {
+            return res.status(404).json({ error: 'Lição não encontrada' });
         }
 
-        // Data da aula (se não fornecida, usa a data atual)
-        const data = data_aula || new Date().toISOString().split('T')[0];
+        const licaoData = licao.rows[0];
+        const keywordDB = licaoData.palavra_chave || '';
 
-        // Iniciar transação
-        await db.query('BEGIN');
-
-        try {
-            // 1. Inserir ou buscar usuário
-            let usuarioId;
-            const usuarioExistente = await db.query(
-                'SELECT id FROM usuarios WHERE email = $1',
-                [email_aluno]
-            );
-
-            if (usuarioExistente.rows.length > 0) {
-                usuarioId = usuarioExistente.rows[0].id;
-                // Atualizar nome e turma
-                await db.query(
-                    'UPDATE usuarios SET nome = $1, turma = $2 WHERE id = $3',
-                    [nome_aluno, turma || null, usuarioId]
-                );
-            } else {
-                const novoUsuario = await db.query(
-                    'INSERT INTO usuarios (nome, email, turma) VALUES ($1, $2, $3) RETURNING id',
-                    [nome_aluno, email_aluno, turma || null]
-                );
-                usuarioId = novoUsuario.rows[0].id;
-            }
-
-            // 2. Registrar presença (ignora se já existir usando ON CONFLICT)
-            await db.query(
-                'INSERT INTO presenca (usuario_id, data_aula) VALUES ($1, $2) ON CONFLICT (usuario_id, data_aula) DO NOTHING',
-                [usuarioId, data]
-            );
-
-            await db.query('COMMIT');
-
-            res.json({ 
-                message: 'Presença registrada com sucesso',
-                data: data
-            });
-
-        } catch (error) {
-            await db.query('ROLLBACK');
-            throw error;
+        // 2. Validar palavra-chave (case‑insensitive)
+        if (keywordDB.toLowerCase() !== palavra_chave.toLowerCase()) {
+            return res.status(403).json({ error: 'Palavra-chave incorreta' });
         }
 
+        // 3. Verificar se este nome já marcou presença nesta lição
+        const existe = await db.query(
+            'SELECT id FROM presencas WHERE nome = $1 AND licao_id = $2',
+            [nome, licaoId]
+        );
+        if (existe.rows.length > 0) {
+            return res.status(409).json({ error: 'Você já marcou presença para esta lição' });
+        }
+
+        // 4. Inserir presença
+        await db.query(
+            'INSERT INTO presencas (nome, licao_id) VALUES ($1, $2)',
+            [nome, licaoId]
+        );
+
+        res.status(201).json({ message: 'Presença registrada com sucesso!' });
     } catch (error) {
         console.error('Erro ao registrar presença:', error);
         res.status(500).json({ error: 'Erro interno do servidor' });
     }
 });
 
-// Verificar se aluno já tem presença em determinada data
-router.get('/verificar/:email/:data?', async (req, res) => {
+// ============================================
+// GET /presenca/por-licao/:licaoId
+// Listar presenças de uma lição (para o professor)
+// ============================================
+router.get('/por-licao/:licaoId', async (req, res) => {
+    const { licaoId } = req.params;
     try {
-        const data = req.params.data || new Date().toISOString().split('T')[0];
-        
-        const result = await db.query(
-            `SELECT p.* FROM presenca p
-             JOIN usuarios u ON p.usuario_id = u.id
-             WHERE u.email = $1 AND p.data_aula = $2`,
-            [req.params.email, data]
+        const presencas = await db.query(
+            `SELECT nome, data_presenca 
+             FROM presencas 
+             WHERE licao_id = $1 
+             ORDER BY data_presenca DESC`,
+            [licaoId]
         );
-
         res.json({
-            presente: result.rows.length > 0,
-            data: data
+            licao_id: licaoId,
+            total: presencas.rows.length,
+            presencas: presencas.rows
         });
     } catch (error) {
-        console.error('Erro ao verificar presença:', error);
+        console.error('Erro ao listar presenças:', error);
         res.status(500).json({ error: 'Erro interno do servidor' });
     }
 });
 
-// Listar presenças de uma data específica
-router.get('/data/:data?', async (req, res) => {
+// ============================================
+// GET /presenca/verificar/:licaoId
+// Verificar se um nome já marcou presença
+// ============================================
+router.get('/verificar/:licaoId', async (req, res) => {
+    const { licaoId } = req.params;
+    const { nome } = req.query;
+    if (!nome) {
+        return res.status(400).json({ error: 'Nome é obrigatório' });
+    }
     try {
-        const data = req.params.data || new Date().toISOString().split('T')[0];
-        
-        const result = await db.query(
-            `SELECT u.id, u.nome, u.email, u.turma, p.data_aula
-             FROM presenca p
-             JOIN usuarios u ON p.usuario_id = u.id
-             WHERE p.data_aula = $1
-             ORDER BY u.nome`,
-            [data]
+        const existe = await db.query(
+            'SELECT id FROM presencas WHERE nome = $1 AND licao_id = $2',
+            [nome, licaoId]
         );
-
-        res.json({
-            data: data,
-            total: result.rows.length,
-            presentes: result.rows
-        });
+        res.json({ presente: existe.rows.length > 0 });
     } catch (error) {
-        console.error('Erro ao listar presenças:', error);
+        console.error('Erro ao verificar presença:', error);
         res.status(500).json({ error: 'Erro interno do servidor' });
     }
 });

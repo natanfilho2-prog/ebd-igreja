@@ -1,36 +1,42 @@
 const { Pool } = require('pg');
 require('dotenv').config();
 
+// Verificar se temos a URL de conexão
+if (!process.env.DATABASE_URL) {
+    console.error('❌ DATABASE_URL não definida no arquivo .env');
+    process.exit(1);
+}
+
+console.log('📡 Conectando ao banco do Render...');
+
 const pool = new Pool({
-    host: process.env.DB_HOST,
-    user: process.env.DB_USER,
-    password: process.env.DB_PASSWORD,
-    database: process.env.DB_NAME,
-    port: 5432,
+    connectionString: process.env.DATABASE_URL,
     ssl: {
-        rejectUnauthorized: false // Obrigatório para Render [citation:7]
+        rejectUnauthorized: false // Obrigatório para conexão externa com o Render
     },
-    // AUMENTAR TIMEOUTS (importante para plano gratuito)
-    connectionTimeoutMillis: 60000, // 60 segundos (antes era 10s)
-    idleTimeoutMillis: 30000,        // 30 segundos
-    max: 10,                         // Máximo de conexões simultâneas
-    allowExitOnIdle: false
+    // Timeouts maiores para o plano gratuito
+    connectionTimeoutMillis: 30000,
+    idleTimeoutMillis: 30000,
+    max: 5 // Reduzir conexões simultâneas para não sobrecarregar
 });
+
+// Testar conexão
+(async () => {
+    try {
+        const client = await pool.connect();
+        const result = await client.query('SELECT 1 + 1 AS solution');
+        console.log('✅ Conectado ao banco do Render! Resultado:', result.rows[0].solution);
+        console.log('🌍 Ambiente:', process.env.NODE_ENV || 'desenvolvimento');
+        client.release();
+    } catch (error) {
+        console.error('❌ Erro ao conectar ao banco do Render:', error.message);
+        console.error('Detalhes:', error);
+    }
+})();
 
 // Evento de erro no pool
 pool.on('error', (err) => {
-    console.error('Erro inesperado no pool do banco:', err);
-});
-
-// Testar conexão com timeout maior
-pool.connect((err, client, release) => {
-    if (err) {
-        console.error('❌ Erro ao conectar no banco:', err.message);
-        console.error('Detalhes:', err);
-    } else {
-        console.log('✅ Banco de dados conectado!');
-        release();
-    }
+    console.error('Erro inesperado no pool:', err);
 });
 
 module.exports = pool;
