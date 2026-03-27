@@ -25,7 +25,7 @@ router.get('/filtered', async (req, res) => {
     const start = startDate.toISOString().split('T')[0];
     const end = endDate.toISOString().split('T')[0];
 
-    // Lições do trimestre (todas, sem filtro de data)
+    // Lições do trimestre (todas)
     const lessons = await db.query(`
         SELECT id 
         FROM licoes 
@@ -44,6 +44,26 @@ router.get('/filtered', async (req, res) => {
         });
     }
 
+    // ============================================
+    // TOTAL DE PERGUNTAS DO TRIMESTRE
+    // ============================================
+    const totalPerguntasResult = await db.query(`
+        SELECT COUNT(*) as total
+        FROM perguntas p
+        WHERE p.licao_id = ANY($1::int[]) AND p.ativa = true
+    `, [lessonIds]);
+    const totalPerguntasTrimestre = parseInt(totalPerguntasResult.rows[0].total);
+
+    if (totalPerguntasTrimestre === 0) {
+        return res.json({
+            total_alunos: 0,
+            total_envios: 0,
+            total_lessons_available: totalLessons,
+            top_alunos: []
+        });
+    }
+
+    // Usuários que responderam pelo menos um quiz
     const users = await db.query(`
         SELECT DISTINCT u.id, u.nome
         FROM usuarios u
@@ -54,6 +74,7 @@ router.get('/filtered', async (req, res) => {
     const stats = [];
 
     for (const user of users.rows) {
+        // Quantos quizzes o usuário respondeu
         const quizzes = await db.query(`
             SELECT COUNT(DISTINCT rl.licao_id) as total
             FROM respostas_licao rl
@@ -61,17 +82,19 @@ router.get('/filtered', async (req, res) => {
         `, [user.id, lessonIds]);
         const totalQuizzes = parseInt(quizzes.rows[0].total);
 
+        // TOTAL DE ACERTOS DO ALUNO NO TRIMESTRE
         const score = await db.query(`
             SELECT 
-                COUNT(*) as total_questions,
                 SUM(CASE WHEN r.correta THEN 1 ELSE 0 END) as total_correct
             FROM respostas r
             WHERE r.usuario_id = $1 AND r.licao_id = ANY($2::int[])
         `, [user.id, lessonIds]);
-        const totalQuestions = parseInt(score.rows[0].total_questions);
         const totalCorrect = parseInt(score.rows[0].total_correct);
-        const mediaQuiz = totalQuestions > 0 ? (totalCorrect / totalQuestions) * 100 : 0;
 
+        // MÉDIA DO QUIZ = acertos / total de perguntas do trimestre
+        const mediaQuiz = (totalCorrect / totalPerguntasTrimestre) * 100;
+
+        // PRESENÇA
         let attended = 0;
         try {
             const pres = await db.query(`
@@ -90,6 +113,8 @@ router.get('/filtered', async (req, res) => {
         }
         const mediaPresenca = (attended / totalLessons) * 100;
         const quizzesPercent = (totalQuizzes / totalLessons) * 100;
+
+        // PONTUAÇÃO COMBINADA
         const pontuacao = (mediaQuiz * 0.5) + (mediaPresenca * 0.3) + (quizzesPercent * 0.2);
 
         stats.push({
